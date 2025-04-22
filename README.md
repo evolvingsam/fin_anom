@@ -4,4 +4,4 @@ A machine learning that can:
 
 **Follow the steps in [requirements.txt](https://github.com/evolvingsam/fin_anom/blob/main/requirements.txt)**
 
-More information about te data used can be found at [kaggle](https://www.kaggle.com/datasets/ealaxi/paysim1/data)
+More information about the data used can be found at [kaggle](https://www.kaggle.com/datasets/ealaxi/paysim1/data)
