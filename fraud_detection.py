@@ -4,7 +4,7 @@ from sklearn.preprocessing import StandardScaler, OneHotEncoder
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier, IsolationForest
 import io
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Step 1: Load historical dataset for context
 data_str = """tran_dt,sender,receiver,amount,sender_prev_bal
@@ -45,8 +45,20 @@ def engineer_features(df, historical_df):
     sender = df['sender'].iloc[0]
     date = df['date'].iloc[0]
     historical_sender = historical_df[historical_df['sender'] == sender]
-    df['daily_txn_count'] = len(historical_sender[historical_sender['tran_dt'].dt.date == date]) + 1  # Include new transaction
-    df['unique_receivers'] = historical_sender['receiver'].nunique() + 1  # Include new receiver
+    existing_count = len(historical_sender[historical_sender['tran_dt'].dt.date == date])
+    # Check if the new transaction is already present (by sender, receiver, amount, and date)
+    already_present = (
+        (historical_sender['tran_dt'].dt.date == date) &
+        (historical_sender['receiver'] == df['receiver'].iloc[0]) &
+        (np.isclose(historical_sender['amount'], df['amount'].iloc[0]))
+    ).any()
+    df['daily_txn_count'] = existing_count + (0 if already_present else 1)
+    # Only add 1 if the new receiver is not already present for this sender
+    new_receiver = df['receiver'].iloc[0]
+    unique_receivers = historical_sender['receiver'].nunique()
+    if new_receiver not in historical_sender['receiver'].values:
+        unique_receivers += 1
+    df['unique_receivers'] = unique_receivers
     
     # Impute categorical features
     df['txn_type'] = 'transfer'
@@ -61,29 +73,15 @@ numerical_cols = ['amount', 'sender_prev_bal', 'sender_post_bal', 'txn_hour', 't
                  'amount_to_balance_ratio', 'daily_txn_count', 'unique_receivers']
 categorical_cols = ['txn_type', 'sender_acc_type', 'txn_location']
 
-# Encode categorical variables
 encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
-X_new_categorical = encoder.fit_transform(df_new[categorical_cols])
-categorical_encoded_cols = encoder.get_feature_names_out(categorical_cols)
-X_new_categorical_df = pd.DataFrame(X_new_categorical, columns=categorical_encoded_cols)
-
-# Combine features
-X_new = pd.concat([df_new[numerical_cols].reset_index(drop=True), X_new_categorical_df], axis=1)
-
-# Standardize features
 scaler = StandardScaler()
-X_new_scaled = scaler.fit_transform(X_new)
-
-# Apply PCA
 pca = PCA(n_components=5)
-X_new_pca = pca.fit_transform(X_new_scaled)
 
 # Step 5: Supervised Fraud Detection (using pre-trained Random Forest)
-# Train Random Forest on hypothetical data (simplified for demo)
 hypo_data = pd.DataFrame({
     'tran_dt': [datetime(2023, 1, 1) + timedelta(days=i) for i in range(1000)],
-    'sender_id': np.random.randint(1000000000, 9999999999, 1000),
-    'receiver_id': np.random.randint(1000000000, 9999999999, 1000),
+    'sender': np.random.randint(1000000000, 9999999999, 1000),
+    'receiver': np.random.randint(1000000000, 9999999999, 1000),
     'amount': np.random.lognormal(mean=5, sigma=1.5, size=1000).round(2),
     'txn_type': np.random.choice(['purchase', 'transfer', 'withdrawal'], 1000),
     'sender_acc_type': np.random.choice(['personal', 'business'], 1000),
@@ -94,9 +92,13 @@ hypo_data = pd.DataFrame({
 hypo_data['sender_post_bal'] = hypo_data['sender_prev_bal'] - hypo_data['amount']
 hypo_data = engineer_features(hypo_data, hypo_data)
 
+# Fit encoder, scaler, PCA on training data only
+X_hypo_categorical = encoder.fit_transform(hypo_data[categorical_cols])
+categorical_encoded_cols = encoder.get_feature_names_out(categorical_cols)
+X_hypo_categorical_df = pd.DataFrame(X_hypo_categorical, columns=categorical_encoded_cols)
 X_hypo = pd.concat([
-    hypo_data[numerical_cols],
-    pd.DataFrame(encoder.fit_transform(hypo_data[categorical_cols]), columns=categorical_encoded_cols)
+    hypo_data[numerical_cols].reset_index(drop=True),
+    X_hypo_categorical_df
 ], axis=1)
 X_hypo_scaled = scaler.fit_transform(X_hypo)
 X_hypo_pca = pca.fit_transform(X_hypo_scaled)
@@ -104,6 +106,13 @@ y_hypo = hypo_data['is_fraud']
 
 rf_model = RandomForestClassifier(n_estimators=100, class_weight='balanced', random_state=42)
 rf_model.fit(X_hypo_pca, y_hypo)
+
+# Transform new transaction using fitted encoder/scaler/PCA
+X_new_categorical = encoder.transform(df_new[categorical_cols])
+X_new_categorical_df = pd.DataFrame(X_new_categorical, columns=categorical_encoded_cols)
+X_new = pd.concat([df_new[numerical_cols].reset_index(drop=True), X_new_categorical_df], axis=1)
+X_new_scaled = scaler.transform(X_new)
+X_new_pca = pca.transform(X_new_scaled)
 
 # Predict fraud
 fraud_prob = rf_model.predict_proba(X_new_pca)[0, 1]
@@ -117,12 +126,14 @@ print(f"Prediction: {'Fraud' if is_fraud_pred == 1 else 'Not Fraud'}")
 # Train on historical data for sender
 sender_historical = df_historical[df_historical['sender'] == new_transaction['sender']].copy()
 sender_historical = engineer_features(sender_historical, df_historical)
+X_sender_categorical = encoder.transform(sender_historical[categorical_cols])
+X_sender_categorical_df = pd.DataFrame(X_sender_categorical, columns=categorical_encoded_cols)
 X_sender = pd.concat([
-    sender_historical[numerical_cols],
-    pd.DataFrame(encoder.transform(sender_historical[categorical_cols]), columns=categorical_encoded_cols)
+    sender_historical[numerical_cols].reset_index(drop=True),
+    X_sender_categorical_df
 ], axis=1)
-X_sender_scaled = scaler.fit_transform(X_sender)
-X_sender_pca = pca.fit_transform(X_sender_scaled)
+X_sender_scaled = scaler.transform(X_sender)
+X_sender_pca = pca.transform(X_sender_scaled)
 
 # Combine new transaction with historical for context
 X_combined_pca = np.vstack([X_sender_pca, X_new_pca])
