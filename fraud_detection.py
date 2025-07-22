@@ -76,7 +76,7 @@ categorical_cols = ['txn_type', 'sender_acc_type', 'txn_location']
 encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
 scaler = StandardScaler()
 pca = PCA(n_components=5)
-
+print(PCA)
 # Step 5: Supervised Fraud Detection (using pre-trained Random Forest)
 hypo_data = pd.DataFrame({
     'tran_dt': [datetime(2023, 1, 1) + timedelta(days=i) for i in range(1000)],
