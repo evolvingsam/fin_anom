@@ -6,8 +6,6 @@ from sklearn.ensemble import RandomForestClassifier, IsolationForest
 import io
 from datetime import datetime, timedelta
 
-# Load historical dataset for context
-
 df_historical = pd.read_csv("transactions_patterned.csv")
 df_historical['tran_dt'] = pd.to_datetime(df_historical['tran_dt'])
 
@@ -54,7 +52,6 @@ def engineer_features(df, historical_df):
 
 df_new = engineer_features(df_new, df_historical)
 
-# Step 4: Preprocess data
 numerical_cols = ['amount', 'sender_prev_bal', 'sender_post_bal', 'txn_hour', 'txn_day_of_week', 
                  'amount_to_balance_ratio', 'daily_txn_count', 'unique_receivers']
 categorical_cols = ['txn_type', 'sender_acc_type', 'txn_location']
@@ -63,7 +60,6 @@ encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
 scaler = StandardScaler()
 pca = PCA(n_components=5)
 
-# Supervised Fraud Detection (using pre-trained Random Forest)
 np.random.seed(42)
 hypo_data = pd.DataFrame({
     'tran_dt': [datetime(2023, 1, 1) + timedelta(days=i % 365) for i in range(10000)],
@@ -76,7 +72,6 @@ hypo_data = pd.DataFrame({
     'txn_location': np.random.choice(['NYC', 'LAX', 'CHI', 'LON', 'TOK'], 10000)
 })
 
-# Add realistic fraud labels (e.g., high amounts at odd hours)
 hypo_data['is_fraud'] = 0
 hypo_data.loc[
     (hypo_data['amount'] > hypo_data['amount'].quantile(0.95)) & 
