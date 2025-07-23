@@ -1,2 +1,2 @@
 tran_dt,sender,receiver,amount,sender_prev_bal,txn_hour,txn_day_of_week,sender_post_bal,amount_to_balance_ratio,date,daily_txn_count,unique_receivers,txn_type,sender_acc_type,txn_location,predicted_fraud,fraud_probability,is_anomaly
-2023-08-07,2301805351,9876543210,500.0,3000.0,0,0,2500.0,0.16666666661111113,2023-08-07,1,6,transfer,personal,NYC,0,0.06,False
+2023-08-07,2301805351,9876543210,500.0,3000.0,0,0,2500.0,0.16666666661111113,2023-08-07,1,27,transfer,personal,NYC,0,0.0,False

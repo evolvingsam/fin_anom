@@ -6,19 +6,9 @@ from sklearn.ensemble import RandomForestClassifier, IsolationForest
 import io
 from datetime import datetime, timedelta
 
-# Step 1: Load historical dataset for context
-data_str = """tran_dt,sender,receiver,amount,sender_prev_bal
-2023-10-20,2301805351,1532644469,147.66,1295.2
-2023-06-04,3703962220,2349736332,89.77,9479.55
-2023-02-07,1529943053,3465910025,133.8,6677.19
-2023-06-13,2555233206,7707731783,1251.02,4546.55
-2023-08-03,1761232323,4532052055,55.01,6418.36
-2023-08-04,2301805351,6580572805,118.95,1867.12
-2023-05-29,2301805351,8293282371,194.16,1610.79
-2023-03-02,2301805351,5888445457,941.74,9872.3
-2023-08-06,2301805351,5782738976,243.02,3357.37
-"""
-df_historical = pd.read_csv(io.StringIO(data_str))
+# Load historical dataset for context
+
+df_historical = pd.read_csv("transactions_patterned.csv")
 df_historical['tran_dt'] = pd.to_datetime(df_historical['tran_dt'])
 
 # Step 2: Define the new transaction
@@ -77,18 +67,25 @@ encoder = OneHotEncoder(sparse_output=False, handle_unknown='ignore')
 scaler = StandardScaler()
 pca = PCA(n_components=5)
 
-# Step 5: Supervised Fraud Detection (using pre-trained Random Forest)
+# Supervised Fraud Detection (using pre-trained Random Forest)
+np.random.seed(42)
 hypo_data = pd.DataFrame({
-    'tran_dt': [datetime(2023, 1, 1) + timedelta(days=i) for i in range(1000)],
-    'sender': np.random.randint(1000000000, 9999999999, 1000),
-    'receiver': np.random.randint(1000000000, 9999999999, 1000),
-    'amount': np.random.lognormal(mean=5, sigma=1.5, size=1000).round(2),
-    'txn_type': np.random.choice(['purchase', 'transfer', 'withdrawal'], 1000),
-    'sender_acc_type': np.random.choice(['personal', 'business'], 1000),
-    'sender_prev_bal': np.random.lognormal(mean=8, sigma=1.5, size=1000).round(2),
-    'txn_location': np.random.choice(['NYC', 'LAX', 'CHI', 'LON', 'TOK'], 1000),
-    'is_fraud': np.random.choice([0, 1], 1000, p=[0.98, 0.02])
+    'tran_dt': [datetime(2023, 1, 1) + timedelta(days=i % 365) for i in range(10000)],
+    'sender': np.random.randint(1000000000, 9999999999, 10000),
+    'receiver': np.random.randint(1000000000, 9999999999, 10000),
+    'amount': np.random.lognormal(mean=5, sigma=1.5, size=10000).round(2),
+    'txn_type': np.random.choice(['purchase', 'transfer', 'withdrawal'], 10000),
+    'sender_acc_type': np.random.choice(['personal', 'business'], 10000),
+    'sender_prev_bal': np.random.lognormal(mean=8, sigma=1.5, size=10000).round(2),
+    'txn_location': np.random.choice(['NYC', 'LAX', 'CHI', 'LON', 'TOK'], 10000)
 })
+
+# Add realistic fraud labels (e.g., high amounts at odd hours)
+hypo_data['is_fraud'] = 0
+hypo_data.loc[
+    (hypo_data['amount'] > hypo_data['amount'].quantile(0.95)) & 
+    (hypo_data['tran_dt'].dt.hour.isin([0, 1, 2, 3, 22, 23])), 
+    'is_fraud'] = 1
 hypo_data['sender_post_bal'] = hypo_data['sender_prev_bal'] - hypo_data['amount']
 hypo_data = engineer_features(hypo_data, hypo_data)
 
